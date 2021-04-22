@@ -3,6 +3,7 @@ const passport = require('passport');
 const logger = require('morgan');
 const LocalStrategy = require('passport-local').Strategy;
 const jwtStrategy = require('passport-jwt').Strategy;
+const githubStrategy = require('passport-github2').Strategy;
 const path = require('path');
 const jwt  = require('jsonwebtoken');
 const jwtSecret= require('crypto').randomBytes(32);
@@ -17,6 +18,9 @@ app.use(express.json()); //Used to parse JSON bodies
 app.use(express.urlencoded({extended:true})); //Parse URL-encoded bodies
 app.use(cookieParser())
 
+
+const GITHUB_CLIENT_ID = "a57a5678b7870738315b";
+const GITHUB_CLIENT_SECRET = "4be6b0c95eda828b1f8fbb79055632bd304444f6";
 
 passport.use('local',new LocalStrategy(
     {
@@ -45,6 +49,19 @@ passport.use('local',new LocalStrategy(
     }
 ));
 
+passport.use('github', new githubStrategy({
+    clientID: GITHUB_CLIENT_ID,
+    clientSecret: GITHUB_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/github/callback"
+  },
+  function(accessToken, refreshToken, profile, done) {
+      
+    if(profile){
+        return done(null, profile);
+    }
+    return done(null, err)
+  }
+));
 
 
 
@@ -62,7 +79,7 @@ var jwtOptions = {
     audience: "localhost:3000"
 };
 /* PASSPORT */
-passport.use('jwt',new jwtStrategy(jwtOptions,(jwt_payload,done) =>{
+passport.use('jwt', new jwtStrategy(jwtOptions,(jwt_payload,done) =>{
 
     if(jwt_payload){
         return done(null,jwt_payload);
@@ -85,7 +102,7 @@ app.use((err,req,res,next)=>{
 app.use(myLogger);
 
 
-app.get('/',passport.authenticate('jwt',{session:false,failureRedirect: '/login'}),(req,res)=>{
+app.get('/', passport.authenticate('jwt',{session:false,failureRedirect: '/login'}),(req,res)=>{
     res.send(fortune.fortune()+ '<a href="http://localhost:3000/logout">logout</a>');
 })
 
@@ -102,8 +119,12 @@ app.get('/login',(req,res)=>{
     res.sendFile(path.join(__dirname,"login.html"));
 });
 
-app.post('/login',passport.authenticate('local',{session : false,failureRedirect: '/login'}),(req,res)=>{
+app.post('/login', passport.authenticate('local',{session : false,failureRedirect: '/login'}),(req,res)=>{
     const payload ={
+        exam:{
+            name: "Alejandro",
+            surname: "Borrajo Viéitez"
+        },
         iss: "localhost:3000",
         sub: req.user.username,
         aud: "localhost:3000",
@@ -114,10 +135,20 @@ app.post('/login',passport.authenticate('local',{session : false,failureRedirect
     res.redirect('/');
 });
 
-app.get('/logout',passport.authenticate('jwt',{session:false,failureRedirect:'/login'}),(req,res)=>{
+app.get('/logout', passport.authenticate('jwt',{session:false,failureRedirect:'/login'}),(req,res)=>{
     res.clearCookie('jwt');
     res.redirect('/login');
 });
+
+app.get('/auth/github', passport.authenticate('github', { scope: [ 'profile:username' ] }));
+
+app.get('/auth/github/callback', 
+  passport.authenticate('github', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    //res.redirect('/');
+  });
+
 app.listen(PORT,()=>{
     console.log(`Listening at http://localhost:${PORT}`);
 });
