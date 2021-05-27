@@ -19,6 +19,8 @@ app.use(express.urlencoded({extended:true})); //Parse URL-encoded bodies
 app.use(cookieParser())
 
 
+
+
 const GITHUB_CLIENT_ID = "a57a5678b7870738315b";
 const GITHUB_CLIENT_SECRET = "4be6b0c95eda828b1f8fbb79055632bd304444f6";
 
@@ -52,10 +54,11 @@ passport.use('local',new LocalStrategy(
 passport.use('github', new githubStrategy({
     clientID: GITHUB_CLIENT_ID,
     clientSecret: GITHUB_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/github/callback"
+    callbackURL: "http://localhost:3000/auth/github/callback",
+    
   },
   function(accessToken, refreshToken, profile, done) {
-      
+
     if(profile){
         return done(null, profile);
     }
@@ -119,7 +122,37 @@ app.get('/login',(req,res)=>{
     res.sendFile(path.join(__dirname,"login.html"));
 });
 
-app.post('/login', passport.authenticate('local',{session : false,failureRedirect: '/login'}),(req,res)=>{
+app.post('/login', passport.authenticate('local',{session : false,failureRedirect: '/login'}),createJWT,(req,res)=>{
+
+    //token = createJWT(req.user.username);
+    //res.cookie('jwt', token);
+    res.redirect('/');
+
+});
+
+app.get('/logout', passport.authenticate('jwt',{session:false,failureRedirect:'/login'}),(req,res)=>{
+    res.clearCookie('jwt');
+    res.redirect('/login');
+});
+
+app.get('/auth/github', passport.authenticate('github', {session:false, scope:['read:user'] }));
+
+app.get('/auth/github/callback', 
+  passport.authenticate('github', {session:false, failureRedirect: '/login' }),createJWT,
+  function(req, res) {
+    // Successful authentication, redirect home.
+    //res.redirect('/');
+     //token = createJWT(req.user.username);
+     //res.cookie('jwt', token);
+     res.redirect('/');
+
+  });
+
+app.listen(PORT,()=>{
+    console.log(`Listening at http://localhost:${PORT}`);
+});
+
+function createJWT(req,res,next){
     const payload ={
         exam:{
             name: "Alejandro",
@@ -130,25 +163,9 @@ app.post('/login', passport.authenticate('local',{session : false,failureRedirec
         aud: "localhost:3000",
         exp: Math.floor(Date.now() / 1000) + 604800
     }
-    const token = jwt.sign(payload,jwtSecret);
-    res.cookie('jwt',token);
-    res.redirect('/');
-});
+    token = jwt.sign(payload,jwtSecret);
+    res.cookie('jwt', token);
+    next();
 
-app.get('/logout', passport.authenticate('jwt',{session:false,failureRedirect:'/login'}),(req,res)=>{
-    res.clearCookie('jwt');
-    res.redirect('/login');
-});
-
-app.get('/auth/github', passport.authenticate('github', { scope: [ 'profile:username' ] }));
-
-app.get('/auth/github/callback', 
-  passport.authenticate('github', { failureRedirect: '/login' }),
-  function(req, res) {
-    // Successful authentication, redirect home.
-    //res.redirect('/');
-  });
-
-app.listen(PORT,()=>{
-    console.log(`Listening at http://localhost:${PORT}`);
-});
+    
+}
