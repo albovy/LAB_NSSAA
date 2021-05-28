@@ -9,7 +9,7 @@
 <body>
     <p><strong>Want to listen to the fortune-teller server?</strong></p>
     <p>Please login to proceed</p>
-    <form action="/login" method="post">  <!-- when the formulary is submitted, it will be POSTed to /login-->
+    <form action="/radius" method="post">  <!-- when the formulary is submitted, it will be POSTed to /login-->
         <div>
             <label>Username:</label>
             <input type="text" name="username" />
@@ -20,8 +20,6 @@
         </div>
         <div>
             <input type="submit" value="Log In" />
-            <a href="/auth/github">Log In with Github</a>
-            <a href="/radius">Log In with Radius</a>
         </div>
     </form>
 </body>

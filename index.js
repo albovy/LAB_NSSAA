@@ -12,6 +12,8 @@ const fortune = require('fortune-teller');
 const PORT = 3000;
 const fakeDb = require("./fake-db.json");
 const bcrypt = require('bcryptjs');
+const radius = require('radius');
+const dgram = require('dgram');
 const app = express();
 app.use(logger('dev'))
 app.use(express.json()); //Used to parse JSON bodies
@@ -23,6 +25,7 @@ app.use(cookieParser())
 
 const GITHUB_CLIENT_ID = "a57a5678b7870738315b";
 const GITHUB_CLIENT_SECRET = "4be6b0c95eda828b1f8fbb79055632bd304444f6";
+const RADIUS_SECRET = "testing123"
 
 passport.use('local',new LocalStrategy(
     {
@@ -50,6 +53,62 @@ passport.use('local',new LocalStrategy(
         return done(null,false);
     }
 ));
+
+passport.use('radius', new LocalStrategy(
+    {
+        usernameField: 'username',
+        passwordField: 'password',
+        session:false
+    },(username,password,done)=>{
+
+        const packet = {
+            code: "Access-Request",
+            secret: RADIUS_SECRET,
+            identifier: 0,
+            attributes: [
+              ['NAS-IP-Address', '127.0.0.1'],
+              ['User-Name', username],
+              ['User-Password', password]
+            ]
+          };
+        const encoded = radius.encode(packet);
+        const client = dgram.createSocket("udp4");
+        client.send(encoded,0, encoded.length, 1812, "localhost");
+
+        const user ={
+            username: username,
+            description: 'usuario'
+        }
+        const p = new Promise((resolve)=>{
+            client.on('message', async function(msg, rinfo) {
+                const decoded = radius.decode({packet: msg, secret: RADIUS_SECRET});
+                const valid_response = radius.verify_response({
+                    response: msg,
+                    request: encoded,
+                    secret: RADIUS_SECRET
+                });
+                client.close();
+                if (valid_response) {
+                    if(decoded.code == "Access-Accept"){
+                        resolve(user);
+                    }else{
+                        resolve(false)
+                    }
+                }else{
+                    resolve(false);
+                }
+    
+            });
+        });
+        
+        
+        p.then((value)=>{
+           return done(null,value);
+        });
+
+    }
+));
+
 
 passport.use('github', new githubStrategy({
     clientID: GITHUB_CLIENT_ID,
@@ -120,6 +179,18 @@ app.get('/user',(req,res)=>{
 
 app.get('/login',(req,res)=>{
     res.sendFile(path.join(__dirname,"login.html"));
+});
+
+app.get('/radius',(req,res)=>{
+    res.sendFile(path.join(__dirname,"radius.html"));
+});
+
+app.post('/radius', passport.authenticate('radius',{session : false,failureRedirect: '/login'}),createJWT,(req,res)=>{
+
+    //token = createJWT(req.user.username);
+    //res.cookie('jwt', token);
+    res.redirect('/');
+
 });
 
 app.post('/login', passport.authenticate('local',{session : false,failureRedirect: '/login'}),createJWT,(req,res)=>{
